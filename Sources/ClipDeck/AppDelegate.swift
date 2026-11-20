@@ -442,6 +442,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func createStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let icon = Bundle.main.image(forResource: NSImage.Name("MenuIcon"))
+            ?? NSImage(systemSymbolName: "square.grid.3x3.fill", accessibilityDescription: "ClipDeck")
+        icon?.isTemplate = true
+        icon?.accessibilityDescription = "ClipDeck"
+        statusItem.button?.image = icon
+        statusItem.button?.imagePosition = .imageLeft
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.delegate = self
@@ -505,9 +511,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func updateStatusAppearance() {
         guard let button = statusItem?.button else { return }
-        button.image = NSImage(systemSymbolName: "square.grid.3x3.fill", accessibilityDescription: "ClipDeck")
-        button.image?.isTemplate = true
-        button.imagePosition = .imageLeft
         button.title = !enabled ? " Ⅱ" : (keyboard.isRunning ? "" : " !")
         button.toolTip = "ClipDeck · \(visibleOccupiedCount)/\(bufferCount) · \(lastMessage)"
     }

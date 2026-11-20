@@ -77,6 +77,10 @@ clipdeck_output_app="$clipdeck_project_dir/dist/ClipDeck.app"
 mkdir -p "$clipdeck_stage_app/Contents/MacOS" "$clipdeck_stage_app/Contents/Resources"
 cp "$clipdeck_binary" "$clipdeck_stage_app/Contents/MacOS/ClipDeck"
 cp "$clipdeck_project_dir/Resources/Info.plist" "$clipdeck_stage_app/Contents/Info.plist"
+cp "$clipdeck_project_dir/Resources/AppIcon.icns" \
+    "$clipdeck_project_dir/Resources/MenuIcon.png" \
+    "$clipdeck_project_dir/Resources/MenuIcon@2x.png" \
+    "$clipdeck_stage_app/Contents/Resources/"
 chmod 755 "$clipdeck_stage_app/Contents/MacOS/ClipDeck"
 /usr/bin/plutil -lint "$clipdeck_stage_app/Contents/Info.plist"
 

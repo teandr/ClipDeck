@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Буфер">
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#E4F0D8"/>
+      <stop offset="0.55" stop-color="#B1D3AF"/>
+      <stop offset="1" stop-color="#79AE9A"/>
+    </linearGradient>
+    <linearGradient id="board" x1="0" y1="0" x2="0.75" y2="1">
+      <stop offset="0" stop-color="#396D62"/>
+      <stop offset="1" stop-color="#20514A"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0.65" y2="1">
+      <stop offset="0" stop-color="#FFFDF1"/>
+      <stop offset="1" stop-color="#E1EDD9"/>
+    </linearGradient>
+    <linearGradient id="clip" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#F9DA87"/>
+      <stop offset="1" stop-color="#D5A24D"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="white"/>
+    </clipPath>
+  </defs>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="#101524" opacity=".13" transform="translate(20 33) scale(.96)"/>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="#101524" opacity=".15" transform="translate(10 20) scale(.98)"/>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="url(#field)"/>
+  <g clip-path="url(#frame)">
+    <path d="M 88,692 C 279,438 579,215 944,176 V 96 H 88 Z" fill="#FAFFE9" opacity=".24"/>
+    <path d="M 86,869 C 257,621 567,410 944,335 V 281 C 560,354 248,563 86,820 Z" fill="#F2FFE3" opacity=".16"/>
+    <rect x="280" y="282" width="464" height="523" rx="74" fill="#234D48" opacity=".28"/>
+    <rect x="272" y="254" width="480" height="530" rx="76" fill="url(#board)" stroke="#183F3E" stroke-width="4"/>
+    <rect x="315" y="304" width="394" height="427" rx="48" fill="#163C35" opacity=".55"/>
+    <rect x="315" y="295" width="394" height="425" rx="48" fill="url(#paper)"/>
+    <path d="M 417,254 H 449 C 449,218 477,190 512,190 C 547,190 575,218 575,254 H 607 C 622,254 634,266 634,281 V 313 C 634,328 622,340 607,340 H 417 C 402,340 390,328 390,313 V 281 C 390,266 402,254 417,254 Z" fill="#152F29" opacity=".35" transform="translate(0 10)"/>
+    <path d="M 417,254 H 449 C 449,218 477,190 512,190 C 547,190 575,218 575,254 H 607 C 622,254 634,266 634,281 V 313 C 634,328 622,340 607,340 H 417 C 402,340 390,328 390,313 V 281 C 390,266 402,254 417,254 Z" fill="url(#clip)" stroke="#F9DB8D" stroke-width="4"/>
+    <circle cx="512" cy="254" r="16" fill="#886529"/>
+    <rect x="400" y="424" width="223" height="23" rx="11.5" fill="#4C8274"/>
+    <rect x="400" y="492" width="178" height="23" rx="11.5" fill="#4C8274"/>
+    <rect x="400" y="560" width="128" height="23" rx="11.5" fill="#4C8274"/>
+    <path d="M 590,593 l 17,17 34,-37" fill="none" stroke="#25806B" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="none" stroke="#FFFFFF" stroke-opacity=".30" stroke-width="4"/>
+</svg>

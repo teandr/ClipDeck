@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Команда">
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#F5C58A"/>
+      <stop offset="0.55" stop-color="#D9855A"/>
+      <stop offset="1" stop-color="#AC5043"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#553334"/>
+      <stop offset="1" stop-color="#2C2029"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#50373F"/>
+      <stop offset="1" stop-color="#2A202C"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#FFF6DB"/>
+      <stop offset="1" stop-color="#FFC98A"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="white"/>
+    </clipPath>
+  </defs>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="#101524" opacity=".13" transform="translate(20 33) scale(.96)"/>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="#101524" opacity=".15" transform="translate(10 20) scale(.98)"/>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="url(#field)"/>
+  <g clip-path="url(#frame)">
+    <path d="M 79,561 C 316,428 606,372 963,412 V 94 H 79 Z" fill="#FFF0BC" opacity=".18"/>
+    <path d="M 79,812 C 327,614 618,551 960,586 V 644 C 605,610 316,679 79,868 Z" fill="#FFBD87" opacity=".19"/>
+    <rect x="238" y="272" width="548" height="543" rx="127" fill="#713A36" opacity=".36"/>
+    <rect x="232" y="240" width="560" height="545" rx="128" fill="url(#base)" stroke="#713E3A" stroke-width="5"/>
+    <rect x="246" y="217" width="532" height="516" rx="117" fill="url(#top)" stroke="#A2756E" stroke-opacity=".64" stroke-width="5"/>
+    <path d="M 361,250 H 660 Q 720,250 741,300" fill="none" stroke="#EFC2A6" stroke-opacity=".18" stroke-width="5" stroke-linecap="round"/>
+    <g transform="translate(324.8 287.8) scale(20.8)">
+      <path d="M 5.65,12.35 V 4.85 A 1.9,1.9 0 1 0 3.75,6.75 H 14.25 A 1.9,1.9 0 1 0 12.35,4.85 V 13.15 A 1.9,1.9 0 1 0 14.25,11.25 H 3.75 A 1.9,1.9 0 1 0 5.65,13.15 Z" fill="none" stroke="#160F1A" stroke-opacity=".66" stroke-width="2.04" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 .19)"/>
+      <path d="M 5.65,12.35 V 4.85 A 1.9,1.9 0 1 0 3.75,6.75 H 14.25 A 1.9,1.9 0 1 0 12.35,4.85 V 13.15 A 1.9,1.9 0 1 0 14.25,11.25 H 3.75 A 1.9,1.9 0 1 0 5.65,13.15 Z" fill="none" stroke="url(#mark)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <path d="M 396,96 H 628 C 745,96 808,96 862,130 C 901,153 924,185 936,233 C 944,268 944,314 944,388 V 628 C 944,733 944,801 910,854 C 885,894 853,917 806,928 C 773,936 723,936 628,936 H 396 C 288,936 219,936 169,902 C 130,876 107,843 95,795 C 88,764 88,713 88,628 V 388 C 88,287 88,219 122,169 C 147,131 180,107 227,100 C 261,96 305,96 396,96 Z" fill="none" stroke="#FFFFFF" stroke-opacity=".30" stroke-width="4"/>
+</svg>

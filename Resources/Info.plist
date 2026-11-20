@@ -8,6 +8,8 @@
     <string>ClipDeck</string>
     <key>CFBundleExecutable</key>
     <string>ClipDeck</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon.icns</string>
     <key>CFBundleIdentifier</key>
     <string>app.clipdeck.ClipDeck</string>
     <key>CFBundleInfoDictionaryVersion</key>
