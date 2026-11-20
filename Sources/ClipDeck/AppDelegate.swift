@@ -257,7 +257,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         captureTimeouts[id] = deadline
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: deadline)
-        clipboard.capture(id: id, baseline: baseline) { [weak self] result in
+        clipboard.capture(id: id, baseline: baseline,
+                          sourceBundleID: interactionTarget?.bundleIdentifier) { [weak self] result in
             guard let self, self.machine.currentCopyID == id else { return }
             guard self.interactionStillTargetsFrontmostApp() else {
                 self.cancelInteraction()
@@ -287,11 +288,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         clipboard.write(payload, expectedChangeCount: revision, shouldWrite: { [weak self] in
             guard let self else { return false }
             return self.pendingPasteID == request && self.enabled && self.keyboard.isRunning && self.isFrontmost(target)
-        }) { [weak self] success in
+        }) { [weak self] result in
             guard let self, self.pendingPasteID == request else { return }
             self.pendingPasteID = nil
-            guard success else {
-                self.report("Не удалось подготовить системный буфер к вставке.")
+            if case .failure(let error) = result {
+                self.report(error.localizedDescription)
                 return
             }
             guard self.enabled, self.keyboard.isRunning, self.isFrontmost(target) else {

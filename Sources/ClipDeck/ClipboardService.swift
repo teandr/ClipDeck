@@ -3,9 +3,8 @@ import ClipDeckCore
 import Foundation
 
 /// Materializes pasteboard data for explicit copies and the visible system cell.
-/// All read I/O is serialized; only value snapshots cross back to main. Paste
-/// commits run on main after prior read work drains, with a live validity check
-/// immediately before touching the system clipboard.
+/// Paste preparation has its own queue so it can proceed while a preview
+/// provider is busy. Only value snapshots cross back to main for the commit.
 /// Nothing is written to disk, logged, or sent over the network.
 final class ClipboardService {
     enum CurrentReadResult {
@@ -17,6 +16,7 @@ final class ClipboardService {
 
     private struct CaptureJob {
         let baseline: Int
+        let sourceBundleID: String?
         let deadline: DispatchTime
         let completion: (Result<ClipboardPayload, ClipboardError>) -> Void
         var observedChange: Int?
@@ -28,6 +28,12 @@ final class ClipboardService {
         case empty
         case success(ClipboardPayload)
         case failure(ClipboardError)
+    }
+
+    private enum SnapshotPurpose {
+        case copy(sourceBundleID: String?)
+        case preview
+        case backup
     }
 
     /// Cancellation must not sit behind a synchronous, slow pasteboard provider.
@@ -63,15 +69,15 @@ final class ClipboardService {
     }
 
     private let queue = DispatchQueue(label: "app.clipdeck.pasteboard", qos: .userInitiated)
-    // Accessed exclusively by queue. AppKit may internally cache named handles;
-    // the initializer is not a claim that NSPasteboard has thread-safe methods.
+    private let pastePreparationQueue = DispatchQueue(label: "app.clipdeck.paste-preparation", qos: .userInitiated)
     private lazy var pasteboard = NSPasteboard(name: .general)
+    private lazy var backupPasteboard = NSPasteboard(name: .general)
     private var captures: [UUID: CaptureJob] = [:]
-    private var pendingMainCommits = 0
     private let currentReadsLock = NSLock()
     private var currentReads: [UUID: CurrentReadJob] = [:]
     private let maxPayloadBytes: Int
     private let captureTimeout: TimeInterval
+    private let pastePreparationTimeout: TimeInterval = 0.5
     private let pollInterval: DispatchTimeInterval = .milliseconds(25)
     private let settleNanoseconds: UInt64 = 40_000_000
 
@@ -92,6 +98,8 @@ final class ClipboardService {
         "Apple files promise pasteboard type",
         "com.apple.NSFilePromiseItemMetaData"
     ]
+    private static let sourceType = NSPasteboard.PasteboardType("org.nspasteboard.source")
+    private static let remoteType = NSPasteboard.PasteboardType("com.apple.is-remote-clipboard")
 
     init(
         maxPayloadBytes: Int = ClipboardStore.defaultMaxPayloadBytes,
@@ -106,6 +114,7 @@ final class ClipboardService {
     func capture(
         id: UUID,
         baseline: Int,
+        sourceBundleID: String?,
         completion: @escaping (Result<ClipboardPayload, ClipboardError>) -> Void
     ) {
         queue.async { [weak self] in
@@ -114,6 +123,7 @@ final class ClipboardService {
             self.captures.removeAll()
             self.captures[id] = CaptureJob(
                 baseline: baseline,
+                sourceBundleID: sourceBundleID,
                 deadline: .now() + self.captureTimeout,
                 completion: completion,
                 observedChange: nil,
@@ -153,64 +163,112 @@ final class ClipboardService {
         job?.cancel()
     }
 
-    /// Drains earlier capture work and then schedules a guarded main-thread
-    /// commit. The coordinator invalidates shouldWrite's request token on every
-    /// new user command *before* it can request another capture. Consequently,
-    /// stale queued writes never overwrite the result of a later native copy.
-    /// The gate also defers live system-cell reads while a main commit is queued.
-    ///
-    /// Completion runs in the same main block as the write, so a successful
-    /// caller can immediately post its marked paste key to its verified target.
+    /// Backs up the existing items and their representations before clearing. The
+    /// deadline also covers a blocked provider, which may outlive this request.
+    /// A successful commit and its completion run together on main.
     func write(
         _ payload: ClipboardPayload,
         expectedChangeCount: Int,
         shouldWrite: @escaping () -> Bool,
-        completion: @escaping (Bool) -> Void
+        completion: @escaping (Result<Void, ClipboardError>) -> Void
     ) {
         precondition(Thread.isMainThread)
-        queue.async { [weak self] in
-            guard let self else {
-                DispatchQueue.main.async { completion(false) }
-                return
-            }
-            self.captures.removeAll()
-            guard (try? payload.validate(maxBytes: self.maxPayloadBytes)) != nil else {
-                DispatchQueue.main.async { completion(false) }
-                return
-            }
-            self.pendingMainCommits += 1
-            DispatchQueue.main.async {
-                defer {
-                    self.queue.async { self.pendingMainCommits -= 1 }
+        let deadline: DispatchTime = .now() + pastePreparationTimeout
+        let timeout = DispatchWorkItem { completion(.failure(.clipboardBackupUnavailable)) }
+        DispatchQueue.main.asyncAfter(deadline: deadline, execute: timeout)
+        pastePreparationQueue.async {
+            guard DispatchTime.now() < deadline else { return }
+            let backup: Result<ClipboardPayload?, ClipboardError> = autoreleasepool {
+                guard (try? payload.validate(maxBytes: self.maxPayloadBytes)) != nil else {
+                    return .failure(.writeFailed)
                 }
-                guard shouldWrite() else { completion(false); return }
-                let destinationBoard = NSPasteboard.general
-                guard destinationBoard.changeCount == expectedChangeCount else {
-                    completion(false)
+                return self.backup(generation: expectedChangeCount, deadline: deadline)
+            }
+            guard DispatchTime.now() < deadline else { return }
+            DispatchQueue.main.async {
+                guard DispatchTime.now() < deadline else { return }
+                timeout.cancel()
+                guard shouldWrite() else {
+                    completion(.failure(.writeFailed))
                     return
                 }
-                let succeeded: Bool = autoreleasepool {
-                    // Build the complete set before clearing anything. These
-                    // native objects are created and used only on main.
-                    var items: [NSPasteboardItem] = []
-                    for item in payload.items {
-                        let destination = NSPasteboardItem()
-                        for representation in item.representations {
-                            guard destination.setData(
-                                representation.data,
-                                forType: NSPasteboard.PasteboardType(representation.type)
-                            ) else { return false }
-                        }
-                        items.append(destination)
+                let result = backup.flatMap { previous in
+                    autoreleasepool {
+                        self.commit(payload, replacing: previous, expectedChangeCount: expectedChangeCount,
+                                    deadline: deadline, shouldWrite: shouldWrite)
                     }
-                    guard !items.isEmpty, shouldWrite(),
-                          destinationBoard.changeCount == expectedChangeCount else { return false }
-                    destinationBoard.clearContents()
-                    return destinationBoard.writeObjects(items)
                 }
-                completion(succeeded)
+                completion(result)
             }
         }
+    }
+
+    private func backup(generation: Int, deadline: DispatchTime) -> Result<ClipboardPayload?, ClipboardError> {
+        let board = backupPasteboard
+        guard board.changeCount == generation else { return .failure(.clipboardChanged) }
+        let attempt = snapshot(on: board, generation: generation, deadline: deadline, purpose: .backup)
+        guard board.changeCount == generation else { return .failure(.clipboardChanged) }
+        switch attempt {
+        case .success(let payload): return .success(payload)
+        case .empty: return .success(nil)
+        case .retry, .failure: return .failure(.clipboardBackupUnavailable)
+        }
+    }
+
+    private func commit(
+        _ payload: ClipboardPayload,
+        replacing previous: ClipboardPayload?,
+        expectedChangeCount: Int,
+        deadline: DispatchTime,
+        shouldWrite: () -> Bool
+    ) -> Result<Void, ClipboardError> {
+        let board = NSPasteboard.general
+        guard let replacement = Self.makeItems(payload), !replacement.isEmpty,
+              let restoration = Self.makeItems(previous) else {
+            return .failure(.writeFailed)
+        }
+        guard DispatchTime.now() < deadline else { return .failure(.clipboardBackupUnavailable) }
+        guard shouldWrite() else { return .failure(.writeFailed) }
+        guard board.changeCount == expectedChangeCount else { return .failure(.clipboardChanged) }
+
+        let clearedRevision = board.clearContents()
+        guard clearedRevision != expectedChangeCount, board.changeCount == clearedRevision else {
+            return .failure(.clipboardChanged)
+        }
+        if board.writeObjects(replacement) {
+            guard board.changeCount == clearedRevision else { return .failure(.clipboardChanged) }
+            return .success(())
+        }
+
+        // A different owner may have written since our clear. Restore only
+        // while we still own this revision, including after a second clear.
+        guard board.changeCount == clearedRevision else { return .failure(.clipboardChanged) }
+        let restorationRevision = board.clearContents()
+        guard restorationRevision != clearedRevision, board.changeCount == restorationRevision else {
+            return .failure(.clipboardChanged)
+        }
+        let restored = restoration.isEmpty || board.writeObjects(restoration)
+        guard board.changeCount == restorationRevision else { return .failure(.clipboardChanged) }
+        if !restored {
+            return .failure(.clipboardRestoreFailed)
+        }
+        return .failure(.writeFailed)
+    }
+
+    private static func makeItems(_ payload: ClipboardPayload?) -> [NSPasteboardItem]? {
+        guard let payload else { return [] }
+        var items: [NSPasteboardItem] = []
+        for item in payload.items {
+            let destination = NSPasteboardItem()
+            for representation in item.representations {
+                guard destination.setData(
+                    representation.data,
+                    forType: NSPasteboard.PasteboardType(representation.type)
+                ) else { return nil }
+            }
+            items.append(destination)
+        }
+        return items
     }
 
     private func poll(_ id: UUID) {
@@ -221,10 +279,6 @@ final class ClipboardService {
             complete(id, result: .failure(.captureTimedOut))
             return
         }
-        guard pendingMainCommits == 0 else {
-            schedulePoll(id)
-            return
-        }
 
         let count = pasteboard.changeCount
         guard count != job.baseline else {
@@ -232,13 +286,21 @@ final class ClipboardService {
             return
         }
 
-        // Avoid the short clear-then-fill gap used by some source applications.
-        // A second generation during capture is retried, never merged.
-        if job.observedChange != count {
+        // A later owner can replace the result of the original copy. Require
+        // one new revision and allow it time to finish supplying data.
+        if job.observedChange == nil {
+            guard count == job.baseline &+ 1 else {
+                complete(id, result: .failure(.clipboardChanged))
+                return
+            }
             job.observedChange = count
             job.observedAt = now
             captures[id] = job
             schedulePoll(id)
+            return
+        }
+        guard job.observedChange == count else {
+            complete(id, result: .failure(.clipboardChanged))
             return
         }
         if let observedAt = job.observedAt,
@@ -247,7 +309,10 @@ final class ClipboardService {
             return
         }
 
-        let attempt = autoreleasepool { snapshot(generation: count, deadline: job.deadline) }
+        let attempt = autoreleasepool {
+            snapshot(on: pasteboard, generation: count, deadline: job.deadline,
+                     purpose: .copy(sourceBundleID: job.sourceBundleID))
+        }
         switch attempt {
         case .retry, .empty:
             schedulePoll(id)
@@ -282,8 +347,8 @@ final class ClipboardService {
             completeCurrent(job, result: .unavailable(.captureTimedOut))
             return
         }
-        // Explicit copies have priority, and no provider read overlaps a write.
-        guard captures.isEmpty, pendingMainCommits == 0 else {
+        // Explicit copies have priority over system-cell reads.
+        guard captures.isEmpty else {
             scheduleCurrentPoll(job)
             return
         }
@@ -303,8 +368,8 @@ final class ClipboardService {
         }
 
         let attempt = autoreleasepool {
-            snapshot(generation: job.generation, deadline: job.deadline,
-                     allowEmpty: true, isCancelled: { job.isCancelled })
+            snapshot(on: pasteboard, generation: job.generation, deadline: job.deadline,
+                     purpose: .preview, isCancelled: { job.isCancelled })
         }
         guard !job.isCancelled else { return }
         guard DispatchTime.now() < job.deadline else {
@@ -359,25 +424,36 @@ final class ClipboardService {
     }
 
     private func snapshot(
+        on pasteboard: NSPasteboard,
         generation: Int,
         deadline: DispatchTime,
-        allowEmpty: Bool = false,
+        purpose: SnapshotPurpose,
         isCancelled: () -> Bool = { false }
     ) -> Attempt {
+        let isBackup: Bool
+        let isPreview: Bool
+        switch purpose {
+        case .copy: (isBackup, isPreview) = (false, false)
+        case .preview: (isBackup, isPreview) = (false, true)
+        case .backup: (isBackup, isPreview) = (true, false)
+        }
         guard !isCancelled(), DispatchTime.now() < deadline else {
             return .failure(.captureTimedOut)
         }
         guard pasteboard.changeCount == generation else { return .retry }
-        let boardTypes = pasteboard.types ?? []
+        let types = pasteboard.types
+        let boardTypes = types ?? []
         if boardTypes.contains(where: { Self.sensitiveTypes.contains($0.rawValue) }) {
             return .failure(.sensitiveContent)
         }
         guard !isCancelled(), DispatchTime.now() < deadline else {
             return .failure(.captureTimedOut)
         }
-        guard let sourceItems = pasteboard.pasteboardItems, !sourceItems.isEmpty else {
+        let items = pasteboard.pasteboardItems
+        guard let sourceItems = items, !sourceItems.isEmpty else {
             guard pasteboard.changeCount == generation else { return .retry }
-            return allowEmpty && boardTypes.isEmpty ? .empty : .retry
+            let knownEmpty = items?.isEmpty == true || types?.isEmpty == true
+            return boardTypes.isEmpty && (isPreview || (isBackup && knownEmpty)) ? .empty : .retry
         }
         guard sourceItems.count <= 4_096 else { return .failure(.malformedPayload) }
 
@@ -386,29 +462,43 @@ final class ClipboardService {
         if allTypes.contains(where: { Self.sensitiveTypes.contains($0.rawValue) }) {
             return .failure(.sensitiveContent)
         }
-        if allowEmpty, allTypes.isEmpty {
+        if case .copy(let expectedSource) = purpose {
+            if allTypes.contains(Self.remoteType) { return .failure(.clipboardChanged) }
+            for item in sourceItems where item.types.contains(Self.sourceType) {
+                guard !isCancelled(), DispatchTime.now() < deadline,
+                      pasteboard.changeCount == generation else { return .retry }
+                guard let data = item.data(forType: Self.sourceType) else { return .retry }
+                guard let expectedSource, data.count <= 1_024,
+                      String(data: data, encoding: .utf8) == expectedSource else {
+                    return .failure(.clipboardChanged)
+                }
+            }
+        }
+        if isPreview, allTypes.isEmpty {
             return pasteboard.changeCount == generation ? .empty : .retry
         }
 
         var payloadItems: [ClipboardPayload.Item] = []
         var totalBytes = 0
-        var sawPromisedData = false
-
         for item in sourceItems {
             guard !isCancelled(), DispatchTime.now() < deadline else { return .failure(.captureTimedOut) }
             guard item.types.count <= 256 else { return .failure(.malformedPayload) }
             var representations: [ClipboardPayload.Representation] = []
             var seenTypes = Set<String>()
+            var sawPromisedData = false
 
             for type in item.types {
                 guard !isCancelled(), DispatchTime.now() < deadline else { return .failure(.captureTimedOut) }
                 guard pasteboard.changeCount == generation else { return .retry }
                 let rawType = type.rawValue
                 if Self.isFilePromise(rawType) {
+                    // A rollback must preserve all items and representations.
+                    if isBackup { return .failure(.unsupportedContent) }
                     sawPromisedData = true
                     continue
                 }
-                guard !rawType.isEmpty, rawType.utf8.count <= 1_024 else {
+                guard !rawType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      rawType.utf8.count <= 1_024 else {
                     return .failure(.malformedPayload)
                 }
                 guard seenTypes.insert(rawType).inserted else { continue }
@@ -436,12 +526,15 @@ final class ClipboardService {
 
         guard pasteboard.changeCount == generation else { return .retry }
         let payload = ClipboardPayload(items: payloadItems)
+        // Empty byte representations can still carry pasteboard types and must
+        // survive a rollback, even if they cannot fill a saved slot alone.
+        if isBackup { return .success(payload) }
         do {
             try payload.validate(maxBytes: maxPayloadBytes)
             return .success(payload)
         } catch let error as ClipboardError {
             // Empty data can be a source still filling its declared types.
-            if allowEmpty, error == .emptyPayload, totalBytes == 0 { return .empty }
+            if isPreview, error == .emptyPayload, totalBytes == 0 { return .empty }
             return error == .emptyPayload ? .retry : .failure(error)
         } catch {
             return .failure(.malformedPayload)

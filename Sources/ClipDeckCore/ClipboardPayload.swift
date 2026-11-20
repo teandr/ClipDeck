@@ -81,7 +81,10 @@ public enum ClipboardError: Error, LocalizedError, Equatable {
     case captureTimedOut
     case sensitiveContent
     case unsupportedContent
+    case clipboardChanged
+    case clipboardBackupUnavailable
     case writeFailed
+    case clipboardRestoreFailed
 
     public var errorDescription: String? {
         switch self {
@@ -101,8 +104,14 @@ public enum ClipboardError: Error, LocalizedError, Equatable {
             return "Приложение пометило содержимое как конфиденциальное или временное. Оно не сохранено."
         case .unsupportedContent:
             return "Приложение передало только обещание файла или недоступный формат. Скопируйте готовый файл или текст."
+        case .clipboardChanged:
+            return "Системный буфер изменился во время операции. Повторите попытку."
+        case .clipboardBackupUnavailable:
+            return "Системный буфер не удалось подготовить к восстановлению. Вставка из ячейки отменена."
         case .writeFailed:
-            return "Не удалось восстановить выбранный фрагмент в системном буфере."
+            return "Не удалось записать выбранный фрагмент в системный буфер."
+        case .clipboardRestoreFailed:
+            return "Запись не удалась, и macOS не приняла прежнее содержимое системного буфера."
         }
     }
 
