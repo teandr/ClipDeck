@@ -53,6 +53,7 @@ private final class ClipboardOverlayPanel: NSPanel {
 @MainActor
 final class OverlayController {
     var onSelect: ((ClipboardCell) -> Void)?
+    var onClearSlot: ((Int) -> Void)?
     var onCancel: (() -> Void)?
     /// Supplies bounded preview contents on demand; the callback returns on main.
     var previewProvider: ((ClipboardCell, @escaping (ClipboardPreviewContent) -> Void) -> Void)?
@@ -115,6 +116,13 @@ final class OverlayController {
         content.onHoverChanged = { [weak self] cell, anchor in
             self?.hoverChanged(cell: cell, anchor: anchor)
         }
+        hoverPreview.onClearSlot = { [weak self] index in
+            guard let self, self.panel.isVisible, self.hoverPreview.isVisible,
+                  self.previewCell == .saved(index) else { return }
+            self.clearPreview()
+            self.content.resetHoverTracking()
+            self.onClearSlot?(index)
+        }
         hoverPreview.onHoverChanged = { [weak self] inside in
             guard let self else { return }
             self.previewPointerInside = inside
@@ -150,7 +158,7 @@ final class OverlayController {
         screen: NSScreen
     ) {
         precondition(Thread.isMainThread)
-        if !panel.isVisible || currentMode != mode || displayedSlots != slots || targetScreen !== screen {
+        if !panel.isVisible || currentMode != mode || targetScreen !== screen || previewChanged(in: slots) {
             clearPreview()
             content.resetHoverTracking()
         }
@@ -168,7 +176,7 @@ final class OverlayController {
 
     func update(slots: [SlotPresentation], defaultSlot: Int, isLoading: Bool) {
         precondition(Thread.isMainThread)
-        if displayedSlots != slots {
+        if previewChanged(in: slots) {
             clearPreview()
             content.resetHoverTracking()
         }
@@ -176,6 +184,12 @@ final class OverlayController {
         content.update(slots: slots, defaultSlot: defaultSlot, isLoading: isLoading)
         if let screen = targetScreen { position(on: screen) }
         if panel.isVisible { content.synchronizeHover(at: NSEvent.mouseLocation) }
+    }
+
+    private func previewChanged(in slots: [SlotPresentation]) -> Bool {
+        [previewCell, hoveredCell].compactMap { $0 }.contains { cell in
+            displayedSlots.first(where: { $0.cell == cell }) != slots.first(where: { $0.cell == cell })
+        }
     }
 
     func showMessage(_ message: String) {

@@ -17,11 +17,15 @@ private final class PreviewTextView: NSTextView {
     override func mouseDown(with event: NSEvent) {}
 }
 
-/// A hover-only reader. It never activates ClipDeck and never touches the
-/// system pasteboard; the coordinator supplies a snapshot of the requested cell.
+private final class PreviewClearButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+/// Shows a snapshot supplied by the coordinator without activating ClipDeck.
 @MainActor
 final class HoverPreviewController {
     var onHoverChanged: ((Bool) -> Void)?
+    var onClearSlot: ((Int) -> Void)?
 
     private let panel: HoverPreviewPanel
     private let contentView: HoverPreviewContentView
@@ -50,6 +54,10 @@ final class HoverPreviewController {
         panel.contentView = surface
         contentView.onHoverChanged = { [weak self] isInside in
             self?.onHoverChanged?(isInside)
+        }
+        contentView.onClearSlot = { [weak self] index in
+            guard let self, self.isVisible else { return }
+            self.onClearSlot?(index)
         }
         applyTheme(.current)
     }
@@ -99,10 +107,12 @@ final class HoverPreviewController {
 
 private final class HoverPreviewContentView: NSView {
     var onHoverChanged: ((Bool) -> Void)?
+    var onClearSlot: ((Int) -> Void)?
 
     private let titleLabel = NSTextField(labelWithString: "")
     private let kindLabel = NSTextField(labelWithString: "")
     private let footerLabel = NSTextField(labelWithString: "")
+    private let clearButton = PreviewClearButton(frame: .zero)
     private let scrollView = PreviewScrollView(frame: .zero)
     private let textView = PreviewTextView(frame: .zero)
     private let imageView = NSImageView(frame: .zero)
@@ -113,6 +123,7 @@ private final class HoverPreviewContentView: NSView {
     private var showingText = false
     private var showingImage = false
     private var theme: AppearanceTheme = .current
+    private var chromeHeight: CGFloat { clearButton.isHidden ? 64 : 76 }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { false }
@@ -132,6 +143,13 @@ private final class HoverPreviewContentView: NSView {
             label.isSelectable = false
             addSubview(label)
         }
+        clearButton.title = "Очистить"
+        clearButton.bezelStyle = .rounded
+        clearButton.controlSize = .small
+        clearButton.target = self
+        clearButton.action = #selector(clearSlot)
+        clearButton.isHidden = true
+        addSubview(clearButton)
 
         textView.isEditable = false
         textView.isSelectable = false
@@ -201,11 +219,14 @@ private final class HoverPreviewContentView: NSView {
         showingImage = false
         footerLabel.stringValue = ""
         messageLabel.stringValue = ""
+        var canClear = true
         switch content {
         case .loading:
+            canClear = false
             kindLabel.stringValue = "Предпросмотр"
             messageLabel.stringValue = "Подготавливаю содержимое…"
         case .empty:
+            canClear = false
             kindLabel.stringValue = "Пусто"
             messageLabel.stringValue = "В этой ячейке пока ничего нет."
         case .text(let text, let truncated):
@@ -234,6 +255,12 @@ private final class HoverPreviewContentView: NSView {
             showingText = true
             footerLabel.stringValue = "Форматы сохранённого фрагмента"
         }
+        clearButton.isHidden = true
+        if canClear, case .saved(let index) = cell {
+            clearButton.tag = index
+            clearButton.setAccessibilityLabel("Очистить буфер \(index + 1)")
+            clearButton.isHidden = false
+        }
         scrollView.isHidden = !showingText
         imageView.isHidden = !showingImage
         messageLabel.isHidden = showingText || showingImage
@@ -244,6 +271,7 @@ private final class HoverPreviewContentView: NSView {
 
     func preferredSize(width: CGFloat, maximumHeight: CGFloat) -> NSSize {
         let innerWidth = max(100, width - 32)
+        let availableBodyHeight = maximumHeight - chromeHeight
         let bodyHeight: CGFloat
         if showingText {
             let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
@@ -252,13 +280,13 @@ private final class HoverPreviewContentView: NSView {
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: [.font: font]
             ).height
-            bodyHeight = min(maximumHeight - 64, max(62, ceil(measured) + 10))
+            bodyHeight = min(availableBodyHeight, max(62, ceil(measured) + 10))
         } else if let ratio = imageAspectRatio {
-            bodyHeight = min(maximumHeight - 64, max(100, innerWidth / max(0.05, ratio)))
+            bodyHeight = min(availableBodyHeight, max(100, innerWidth / max(0.05, ratio)))
         } else {
             bodyHeight = 62
         }
-        return NSSize(width: width, height: min(maximumHeight, bodyHeight + 64))
+        return NSSize(width: width, height: min(maximumHeight, bodyHeight + chromeHeight))
     }
 
     override func layout() {
@@ -267,11 +295,19 @@ private final class HoverPreviewContentView: NSView {
         let innerWidth = max(0, bounds.width - 2 * inset)
         titleLabel.frame = NSRect(x: inset, y: 12, width: innerWidth * 0.55, height: 17)
         kindLabel.frame = NSRect(x: inset + innerWidth * 0.55, y: 14, width: innerWidth * 0.45, height: 14)
-        let body = NSRect(x: inset, y: 37, width: innerWidth, height: max(20, bounds.height - 64))
+        let body = NSRect(x: inset, y: 37, width: innerWidth, height: max(20, bounds.height - chromeHeight))
         scrollView.frame = body
         imageView.frame = body
         messageLabel.frame = NSRect(x: body.minX, y: body.midY - 20, width: body.width, height: 46)
-        footerLabel.frame = NSRect(x: inset, y: bounds.height - 19, width: innerWidth, height: 13)
+        if clearButton.isHidden {
+            footerLabel.frame = NSRect(x: inset, y: bounds.height - 19, width: innerWidth, height: 13)
+        } else {
+            let buttonWidth = min(innerWidth, max(80, clearButton.fittingSize.width))
+            clearButton.frame = NSRect(x: bounds.width - inset - buttonWidth, y: bounds.height - 32,
+                                       width: buttonWidth, height: 24)
+            footerLabel.frame = NSRect(x: inset, y: clearButton.frame.midY - 6.5,
+                                       width: max(0, innerWidth - buttonWidth - 8), height: 13)
+        }
 
         if showingText {
             let width = max(60, scrollView.contentSize.width)
@@ -287,10 +323,16 @@ private final class HoverPreviewContentView: NSView {
     }
 
     func clear() {
+        clearButton.isHidden = true
         imageView.image = nil
         textView.string = ""
         displayedText = ""
         imageAspectRatio = nil
+    }
+
+    @objc private func clearSlot() {
+        guard !clearButton.isHidden else { return }
+        onClearSlot?(clearButton.tag)
     }
 
     override func updateTrackingAreas() {

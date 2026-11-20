@@ -38,6 +38,7 @@ public struct InteractionState {
     public enum Input: Equatable {
         case shortcut(Shortcut, isRepeat: Bool)
         case selectSlot(Int)
+        case clearSlot(Int)
         /// Choose the live system clipboard independently of the saved slots.
         case selectSystemClipboard
         /// The app has obtained a complete, validated snapshot for this session.
@@ -57,6 +58,7 @@ public struct InteractionState {
         case discardCopy(UUID)
         /// Store the captured snapshot, then acknowledge success or failure.
         case storeCopy(UUID, slot: Int)
+        case clearSlot(Int)
         /// The app restores this slot and posts its own marked paste keystroke.
         case pasteSlot(Int)
         /// Post a marked native paste without replacing the system clipboard.
@@ -128,6 +130,15 @@ public struct InteractionState {
                 return [.showError("Выберите ячейку от 1 до \(configuredSlotCount).")]
             }
             return chooseSlot(slot, occupiedSlots: occupiedSlots)
+
+        case .clearSlot(let slot):
+            guard isOverlayVisible, isValidSlot(slot), occupiedSlots.contains(slot) else { return [] }
+            if case .copying(let session) = phase, session.queuedSlot == slot {
+                guard !session.isStoring else { return [] }
+                // Leave the capture active so the user can choose where to save it.
+                phase = .copying(CopySession(id: session.id, isReady: false, queuedSlot: nil))
+            }
+            return [.clearSlot(slot)]
 
         case .selectSystemClipboard:
             switch phase {

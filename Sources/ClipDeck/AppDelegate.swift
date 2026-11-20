@@ -106,6 +106,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .saved(let index): self?.selectSlot(index)
             }
         }
+        overlay.onClearSlot = { [weak self] index in
+            guard let self else { return }
+            guard self.interactionStillTargetsFrontmostApp() else {
+                self.cancelInteraction()
+                return
+            }
+            self.apply(self.machine.handle(.clearSlot(index), defaultSlot: self.defaultSlot,
+                                           occupiedSlots: self.store.occupiedSlots))
+        }
         overlay.onCancel = { [weak self] in self?.cancelInteraction() }
         overlay.previewProvider = { [weak self] cell, completion in
             guard let self, self.machine.isOverlayVisible else {
@@ -229,6 +238,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     apply(machine.handle(.copyStoreFailed(id, message: error.localizedDescription),
                                          defaultSlot: defaultSlot, occupiedSlots: store.occupiedSlots))
                 }
+            case .clearSlot(let slot):
+                store.clear(at: slot)
+                let message = "Ячейка \(slot + 1) очищена"
+                lastMessage = message
+                overlayMessage = message
+                scheduleRender()
+                scheduleStatusUpdate()
             case .pasteSlot(let slot):
                 if let target { paste(slot: slot, into: target) }
             case .pasteSystemClipboard:

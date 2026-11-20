@@ -325,10 +325,38 @@ final class InteractionStateTests: XCTestCase {
     func testPasteUsesFreshOccupancyInformation() {
         var machine = Machine()
         _ = send(.shortcut(.paste, isRepeat: false), to: &machine, occupied: [2])
+        XCTAssertEqual(send(.clearSlot(2), to: &machine, occupied: [2]), [.clearSlot(2)])
+        XCTAssertEqual(machine.phase, .pasting)
         XCTAssertEqual(
             send(.selectSlot(2), to: &machine, occupied: []),
             [.showError("Ячейка 3 пуста. Сначала сохраните в неё фрагмент.")]
         )
+    }
+
+    func testClearOnlyActsOnOccupiedVisibleSlotsInAnActivePanel() {
+        var machine = Machine(slotCount: 2)
+        XCTAssertEqual(send(.clearSlot(0), to: &machine, occupied: [0]), [])
+        _ = send(.shortcut(.paste, isRepeat: false), to: &machine)
+        XCTAssertEqual(send(.clearSlot(1), to: &machine, occupied: [0, 2]), [])
+        XCTAssertEqual(send(.clearSlot(2), to: &machine, occupied: [0, 2]), [])
+        XCTAssertEqual(machine.phase, .pasting)
+    }
+
+    func testClearingQueuedSlotKeepsCaptureAvailableWithoutRefillingSlot() throws {
+        var machine = Machine()
+        let id = try startCopy(&machine)
+        _ = send(.selectSlot(2), to: &machine)
+        XCTAssertEqual(send(.clearSlot(2), to: &machine, occupied: [2]), [.clearSlot(2)])
+        XCTAssertEqual(send(.copyCaptured(id), to: &machine), [.showOverlay(.copy, isLoading: false)])
+        XCTAssertEqual(send(.selectSlot(3), to: &machine), [.storeCopy(id, slot: 3)])
+    }
+
+    func testClearingDifferentSlotPreservesQueuedCopy() throws {
+        var machine = Machine()
+        let id = try startCopy(&machine)
+        _ = send(.selectSlot(2), to: &machine)
+        XCTAssertEqual(send(.clearSlot(3), to: &machine, occupied: [3]), [.clearSlot(3)])
+        XCTAssertEqual(send(.copyCaptured(id), to: &machine), [.storeCopy(id, slot: 2)])
     }
 
     func testEscapeCancelsPasteWithoutPasting() {
