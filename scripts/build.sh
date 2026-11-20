@@ -49,10 +49,18 @@ if [ "$clipdeck_sdk_major" -ge 26 ]; then
     clipdeck_glass_define="CLIPDECK_HAS_GLASS"
 fi
 printf 'Using macOS SDK: %s\n' "$clipdeck_sdk_version"
-/usr/bin/xcrun swift build --configuration release --product ClipDeck \
-    --sdk "$clipdeck_sdk_path" -Xswiftc "-D$clipdeck_glass_define"
-clipdeck_binary_dir="$(/usr/bin/xcrun swift build --configuration release --show-bin-path \
-    --sdk "$clipdeck_sdk_path" -Xswiftc "-D$clipdeck_glass_define")"
+
+# Compiler module caches embed absolute paths. A relocated checkout must
+# build in a new scratch directory even if its old .build was copied with it.
+clipdeck_checkout_key="$(printf '%s' "$clipdeck_project_dir" | /usr/bin/shasum -a 256 | /usr/bin/cut -c 1-16)"
+clipdeck_swift_build_options=(
+    --configuration release
+    --scratch-path "$clipdeck_project_dir/.build/clipdeck-$clipdeck_checkout_key"
+    --sdk "$clipdeck_sdk_path"
+    -Xswiftc "-D$clipdeck_glass_define"
+)
+/usr/bin/xcrun swift build "${clipdeck_swift_build_options[@]}" --product ClipDeck
+clipdeck_binary_dir="$(/usr/bin/xcrun swift build "${clipdeck_swift_build_options[@]}" --show-bin-path)"
 clipdeck_binary="$clipdeck_binary_dir/ClipDeck"
 
 if [ ! -x "$clipdeck_binary" ]; then
